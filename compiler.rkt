@@ -67,9 +67,28 @@
   (match p
     [(Program info e) (Program info ((uniquify-exp '()) e))]))
 
+(define (atom? exp)
+  (match exp
+    [(Int v) #t]
+    [(Var v) #t]
+    [else #f]))
+
+(define (remove-complex-exp* exp)
+  (match exp
+  [(Int v) (Int v)]
+  [(Var v) (Var v)]
+  [(Prim '- e) (let ([dict (rco-atom)]) (Let ))]))
+
+(define (rco-atom exp)
+  (dict-set '() (gensym) (remove-complex-exp* exp)))
+
+(define (rco-exp exp)
+  exp)
+
 ;; remove-complex-opera* : R1 -> R1
 (define (remove-complex-opera* p)
-  (error "TODO: code goes here (remove-complex-opera*)"))
+  (match p
+    [(Program info exp) (Program info (remove-complex-exp* exp))]))
 
 ;; explicate-control : R1 -> C0
 (define (explicate-control p)
