@@ -55,10 +55,10 @@
   (lambda (e)
     (match e
       [(Var x)
-       (error "TODO: code goes here (uniquify-exp, symbol?)")]
+       (Var (dict-ref env x))]
       [(Int n) (Int n)]
       [(Let x e body)
-       (error "TODO: code goes here (uniquify-exp, let)")]
+       (define new-name (gensym)) (define new-env (dict-set env x new-name)) (Let new-name ((uniquify-exp env) e) ((uniquify-exp new-env) body))]
       [(Prim op es)
        (Prim op (for/list ([e es]) ((uniquify-exp env) e)))])))
 
@@ -67,28 +67,40 @@
   (match p
     [(Program info e) (Program info ((uniquify-exp '()) e))]))
 
+;; remove-complex-opera* : R1 -> R1
+(define (remove-complex-opera* p)
+  (match p
+    [(Program info exp) (Program info (rco-exp exp))]))
+
 (define (atom? exp)
   (match exp
     [(Int v) #t]
     [(Var v) #t]
     [else #f]))
 
-(define (remove-complex-exp* exp)
+(define (rco-exp exp)
   (match exp
   [(Int v) (Int v)]
   [(Var v) (Var v)]
-  [(Prim '- e) (let ([dict (rco-atom)]) (Let ))]))
+  [(Prim 'read '()) (Prim 'read '())]
+  [(Prim '- (list e))
+   (if (atom? e)
+       (Prim '- (list e))
+       (let-values ([(var-name dict) (rco-atom e)]) (Let var-name (dict-ref dict var-name) (Prim '- (list (Var var-name))))))]
+  [(Prim '+ (list e1 e2))
+   (match (list (atom? e1) (atom? e2))
+     [(list #t #t) (Prim '+ (list e1 e2))]
+     [(list #f #f)
+      (define-values (name1 alist1) (rco-atom e1))
+      (define-values (name2 alist2) (rco-atom e2))
+      (Let name1 (dict-ref alist1 name1) (Let name2 (dict-ref alist2 name2) (Prim '+ (list (Var name1) (Var name2)))))]
+     [(list #f #t) (define-values (name1 alist1) (rco-atom e1)) (Let name1 (dict-ref alist1 name1) (Prim '+ (list (Var name1) e2)))]
+     [(list #t #f) (define-values (name2 alist2) (rco-atom e2)) (Let name2 (dict-ref alist2 name2) (Prim '+ (list e1 (Var name2))))])]
+  [(Let var e b) (Let var (rco-exp e) (rco-exp b))]))
 
 (define (rco-atom exp)
-  (dict-set '() (gensym) (remove-complex-exp* exp)))
-
-(define (rco-exp exp)
-  exp)
-
-;; remove-complex-opera* : R1 -> R1
-(define (remove-complex-opera* p)
-  (match p
-    [(Program info exp) (Program info (remove-complex-exp* exp))]))
+  (define var-name (gensym))
+  (values var-name (dict-set '() var-name (rco-exp exp))))
 
 ;; explicate-control : R1 -> C0
 (define (explicate-control p)
@@ -114,9 +126,9 @@
 ;; Note that your compiler file (the file that defines the passes)
 ;; must be named "compiler.rkt"
 (define compiler-passes
-  `( ("uniquify" ,uniquify ,interp-Lvar)
+  `( ;("uniquify" ,uniquify ,interp-Lvar)
      ;; Uncomment the following passes as you finish them.
-     ;; ("remove complex opera*" ,remove-complex-opera* ,interp-Lvar)
+     ("remove complex opera*" ,remove-complex-opera* ,interp-Lvar)
      ;; ("explicate control" ,explicate-control ,interp-Cvar)
      ;; ("instruction selection" ,select-instructions ,interp-x86-0)
      ;; ("assign homes" ,assign-homes ,interp-x86-0)
