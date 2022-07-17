@@ -3,7 +3,9 @@
 (require racket/fixnum)
 (require "interp-Lint.rkt")
 (require "interp-Lvar.rkt")
+(require "interp-Cvar.rkt")
 (require "utilities.rkt")
+
 (provide (all-defined-out))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -104,7 +106,31 @@
 
 ;; explicate-control : R1 -> C0
 (define (explicate-control p)
-  (error "TODO: code goes here (explicate-control)"))
+  (match p
+    [(Program info body) (CProgram info (dict-set '() 'start (explicate-tail body)))]))
+
+(define (explicate-tail e)
+  (match e
+    [(Var x) (Return (Var x))]
+    [(Int n) (Return (Int n))]
+    [(Let x rhs body) (explicate-assign rhs x (explicate-tail body))]
+    [(Prim op es) (Return (Prim op es))]
+    [else (error "explicate-tail unhandled case" e)]))
+
+(define (explicate-assign e x cont)
+  (match e
+    [(Var v) (Seq (Assign (Var x) (Var v)) cont)]
+    [(Int n) (Seq (Assign (Var x) (Int n)) cont)]
+    [(Let y rhs body)
+     (define tail (explicate-assign rhs y (explicate-tail body)))
+     (assign-tail tail x cont)]
+    [(Prim op es) (Seq (Assign (Var x) (Prim op es)) cont)]
+    [else (error "explicate-assign unhandled case" e)]))
+
+(define (assign-tail tail x cont)
+  (match tail
+    [(Return exp) (Seq (Assign (Var x) exp) cont)]
+    [(Seq st ta) (Seq st (assign-tail ta x cont))]))
 
 ;; select-instructions : C0 -> pseudo-x86
 (define (select-instructions p)
@@ -126,10 +152,10 @@
 ;; Note that your compiler file (the file that defines the passes)
 ;; must be named "compiler.rkt"
 (define compiler-passes
-  `( ;("uniquify" ,uniquify ,interp-Lvar)
+  `( ("uniquify" ,uniquify ,interp-Lvar)
      ;; Uncomment the following passes as you finish them.
      ("remove complex opera*" ,remove-complex-opera* ,interp-Lvar)
-     ;; ("explicate control" ,explicate-control ,interp-Cvar)
+     ("explicate control" ,explicate-control ,interp-Cvar)
      ;; ("instruction selection" ,select-instructions ,interp-x86-0)
      ;; ("assign homes" ,assign-homes ,interp-x86-0)
      ;; ("patch instructions" ,patch-instructions ,interp-x86-0)
