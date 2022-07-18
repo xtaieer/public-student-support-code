@@ -134,7 +134,20 @@
 
 ;; select-instructions : C0 -> pseudo-x86
 (define (select-instructions p)
-  (error "TODO: code goes here (select-instructions)"))
+  (match p
+    [(CProgram info alist) (for/list ([a as]) (cons (car a) (cons (Block info (select-instructions-exp (cdr a) (car a))) '())))]))
+
+(define (select-instructions-exp exp label)
+  (match exp
+    [(Prim '- (list e)) ()]
+(define (select-instructions-assgin assgin)
+  (match assgin
+    [(Assgin (Var x) exp) ]))
+    
+(define (select-instructions-atom atom a)
+  (match a
+    [(Var v) (Var v)]
+    [(Int n) (Imm n)]))
 
 ;; assign-homes : pseudo-x86 -> pseudo-x86
 (define (assign-homes p)
