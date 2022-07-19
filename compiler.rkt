@@ -1,6 +1,7 @@
 #lang racket
 (require racket/set racket/stream)
 (require racket/fixnum)
+(require "interp.rkt")
 (require "interp-Lint.rkt")
 (require "interp-Lvar.rkt")
 (require "interp-Cvar.rkt")
@@ -135,15 +136,24 @@
 ;; select-instructions : C0 -> pseudo-x86
 (define (select-instructions p)
   (match p
-    [(CProgram info alist) (for/list ([a as]) (cons (car a) (cons (Block info (select-instructions-exp (cdr a) (car a))) '())))]))
+    [(CProgram info alist) (X86Program info  (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) (car a))))) (list (cons )))]))
+
+(define (select-instructions-tail tail label)
+  (match tail
+    [(Return exp)
+     (match exp
+       [(Prim '- (list e)) (list (Instr 'movq (list (select-instructions-atom e) (Reg 'rax))) (Instr 'negq (list (Reg 'rax))) (Jmp label))]
+       [(Prim '+ (list e1 e2)) (list (Instr 'movq (list (select-instructions-atom e1) (Reg 'rax))) (Instr 'addq (list (select-instructions-atom e2) (Reg 'rax))) (Jmp label))]
+       [(Prim 'read '()) (list (Callq 'read_int) (Jmp label))])]
+    [(Seq stmt t) (append (select-instructions-assgin stmt) (select-instructions-tail t label))]))
 
 (define (select-instructions-assgin assgin)
   (match assgin
-    [(Assgin (Var x) exp)
+    [(Assign (Var x) exp)
      (match exp
        [(Prim '- (list e)) (list (Instr 'movq (list (select-instructions-atom e) (Var x))) (Instr 'negq (list (Var x))))]
        [(Prim '+ (list e1 e2)) (list (Instr 'movq (list (select-instructions-atom e1) (Var x))) (Instr 'addq (list (select-instructions-atom e2) (Var x))))]
-       [(Prim 'read '()) (list (Callq ))])]))
+       [(Prim 'read '()) (list (Callq 'read_int) (Instr 'movq (list (Reg 'rax) (Var x))))])]))
     
 (define (select-instructions-atom a)
   (match a
@@ -170,7 +180,7 @@
      ;; Uncomment the following passes as you finish them.
      ("remove complex opera*" ,remove-complex-opera* ,interp-Lvar)
      ("explicate control" ,explicate-control ,interp-Cvar)
-     ;; ("instruction selection" ,select-instructions ,interp-x86-0)
+     ("instruction selection" ,select-instructions ,interp-x86-0)
      ;; ("assign homes" ,assign-homes ,interp-x86-0)
      ;; ("patch instructions" ,patch-instructions ,interp-x86-0)
      ;; ("prelude-and-conclusion" ,prelude-and-conclusion ,interp-x86-0)
