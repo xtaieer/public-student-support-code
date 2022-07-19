@@ -137,14 +137,15 @@
   (match p
     [(CProgram info alist) (for/list ([a as]) (cons (car a) (cons (Block info (select-instructions-exp (cdr a) (car a))) '())))]))
 
-(define (select-instructions-exp exp label)
-  (match exp
-    [(Prim '- (list e)) ()]
 (define (select-instructions-assgin assgin)
   (match assgin
-    [(Assgin (Var x) exp) ]))
+    [(Assgin (Var x) exp)
+     (match exp
+       [(Prim '- (list e)) (list (Instr 'movq (list (select-instructions-atom e) (Var x))) (Instr 'negq (list (Var x))))]
+       [(Prim '+ (list e1 e2)) (list (Instr 'movq (list (select-instructions-atom e1) (Var x))) (Instr 'addq (list (select-instructions-atom e2) (Var x))))]
+       [(Prim 'read '()) (list (Callq ))])]))
     
-(define (select-instructions-atom atom a)
+(define (select-instructions-atom a)
   (match a
     [(Var v) (Var v)]
     [(Int n) (Imm n)]))
