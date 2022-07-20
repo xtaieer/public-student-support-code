@@ -102,7 +102,7 @@
   [(Let var e b) (Let var (rco-exp e) (rco-exp b))]))
 
 (define (rco-atom exp)
-  (define var-name (gensym))
+ (define var-name (gensym))
   (values var-name (dict-set '() var-name (rco-exp exp))))
 
 ;; explicate-control : R1 -> C0
@@ -136,12 +136,14 @@
 ;; select-instructions : C0 -> pseudo-x86
 (define (select-instructions p)
   (match p
-    [(CProgram info alist) (X86Program info  (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) (car a))))) (list (cons )))]))
+    [(CProgram info alist) (X86Program info  (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) (car a))))))]))
 
 (define (select-instructions-tail tail label)
   (match tail
     [(Return exp)
      (match exp
+       [(Var v) (list (Instr 'movq (list (Var v) (Reg 'rax))) (Jmp label))]
+       [(Int n) (list (Instr 'movq (list (Imm n) (Reg 'rax))) (Jmp label))]
        [(Prim '- (list e)) (list (Instr 'movq (list (select-instructions-atom e) (Reg 'rax))) (Instr 'negq (list (Reg 'rax))) (Jmp label))]
        [(Prim '+ (list e1 e2)) (list (Instr 'movq (list (select-instructions-atom e1) (Reg 'rax))) (Instr 'addq (list (select-instructions-atom e2) (Reg 'rax))) (Jmp label))]
        [(Prim 'read '()) (list (Callq 'read_int) (Jmp label))])]
