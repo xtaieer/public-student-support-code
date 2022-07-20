@@ -136,7 +136,7 @@
 ;; select-instructions : C0 -> pseudo-x86
 (define (select-instructions p)
   (match p
-    [(CProgram info alist) (X86Program info  (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) (car a))))))]))
+    [(CProgram info alist) (X86Program info (append (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) 'conclusion)))) (list (cons 'conclusion (Block '() (list (Retq)))))))]))
 
 (define (select-instructions-tail tail label)
   (match tail
@@ -153,6 +153,8 @@
   (match assgin
     [(Assign (Var x) exp)
      (match exp
+       [(Int n) (list (Instr 'movq (list (Imm n) (Var x))))]
+       [(Var v) (list (Instr 'movq (list (Var v) (Var x))))]
        [(Prim '- (list e)) (list (Instr 'movq (list (select-instructions-atom e) (Var x))) (Instr 'negq (list (Var x))))]
        [(Prim '+ (list e1 e2)) (list (Instr 'movq (list (select-instructions-atom e1) (Var x))) (Instr 'addq (list (select-instructions-atom e2) (Var x))))]
        [(Prim 'read '()) (list (Callq 'read_int) (Instr 'movq (list (Reg 'rax) (Var x))))])]))
