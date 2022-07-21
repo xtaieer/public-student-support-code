@@ -6,6 +6,7 @@
 (require "interp-Lvar.rkt")
 (require "interp-Cvar.rkt")
 (require "utilities.rkt")
+(require "type-check-Cvar.rkt")
 
 (provide (all-defined-out))
 
@@ -108,7 +109,7 @@
 ;; explicate-control : R1 -> C0
 (define (explicate-control p)
   (match p
-    [(Program info body) (CProgram info (dict-set '() 'start (explicate-tail body)))]))
+    [(Program info body) (type-check-Cvar (CProgram info (dict-set '() 'start (explicate-tail body))))]))
 
 (define (explicate-tail e)
   (match e
@@ -167,6 +168,18 @@
 ;; assign-homes : pseudo-x86 -> pseudo-x86
 (define (assign-homes p)
   (error "TODO: code goes here (assign-homes)"))
+
+(define (assign-homes-instr env stack-pos instr)
+  (match instr
+    [(Instr op args) (for/list ([arg args]) (begin (define-values (new-env new-stack-pos new-arg) (assign-homes-arg env stack-pos arg)) ())]))
+
+(define (assign-homes-arg env stack-pos a)
+  (match a
+    [(Imm i) (values env stack-pos (Imm i))]
+    [(Var v)
+     (if (dict-key? env v)
+         (values env stack-pose (Deref 'rbp (dict-ref env v)))
+         (let* ([new-stack-pos (+ stack-pos 8)] [new-env (dict-set env v new-stack-pos)]) (values new-env new-stack-pos (Deref 'rbp new-stack-pos))))]))
 
 ;; patch-instructions : psuedo-x86 -> x86
 (define (patch-instructions p)
