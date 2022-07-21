@@ -1,6 +1,7 @@
 #lang racket
 (require racket/set racket/stream)
 (require racket/fixnum)
+(require racket/dict)
 (require "interp.rkt")
 (require "interp-Lint.rkt")
 (require "interp-Lvar.rkt")
@@ -167,18 +168,38 @@
 
 ;; assign-homes : pseudo-x86 -> pseudo-x86
 (define (assign-homes p)
-  (error "TODO: code goes here (assign-homes)"))
+  (match p
+    [(X86Program info label-blocks) (let-values ([(env pos new-blocks) (assign-homes-blocks '() 0 label-blocks)]) (X86Program (cons 'stack-space pos) new-blocks))]))
+
+(define (assign-homes-block env stack-pos block)
+  (match block
+    [(Block info instrs) (let-values ([(new-env new-pos new-instrs) (assign-homes-instrs env stack-pos instrs)]) (values new-env new-pos (Block info new-instrs)))]))
+
+(define (assign-homes-blocks env stack-pos label-blocks)
+  (match label-blocks
+    ['() (values env stack-pos '())]
+    [(cons label-block tail)
+     (let*-values ([(new-env new-pos new-block) (assign-homes-block env stack-pos (cdr label-block))] [(env2 pos2 new-tail) (assign-homes-blocks new-env new-pos tail)])
+       (values env2 pos2 (cons (cons (car label-block) new-block) new-tail)))]))
+
+(define (assign-homes-instrs env stack-pos instr-list)
+  (match instr-list
+    ['() (values env stack-pos '())]
+    [(cons instr tail) (let*-values ([(env1 pos1 new-instr) (assign-homes-instr env stack-pos instr)] [(env2 pos2 new-tail) (assign-homes-instrs env1 pos1 tail)]) (values env2 pos2 (cons new-instr new-tail)))]))
 
 (define (assign-homes-instr env stack-pos instr)
   (match instr
-    [(Instr op args) (for/list ([arg args]) (begin (define-values (new-env new-stack-pos new-arg) (assign-homes-arg env stack-pos arg)) ())]))
+    [(Instr 'negq (list a)) (let-values ([(new-env new-stack-pos new-instr) (assign-homes-arg env stack-pos a)]) (values new-env new-stack-pos (Instr 'negq (list new-instr))))]
+    [(Instr op (list e1 e2)) (let*-values ([(env1 pos1 instr1) (assign-homes-arg env stack-pos e1)] [(env2 pos2 instr2) (assign-homes-arg env1 pos1 e2)]) (values env2 pos2 (Instr op (list instr1 instr2))))]
+    [else (values env stack-pos instr)]))
 
 (define (assign-homes-arg env stack-pos a)
   (match a
     [(Imm i) (values env stack-pos (Imm i))]
+    [(Reg r) (values env stack-pos (Reg r))]
     [(Var v)
-     (if (dict-key? env v)
-         (values env stack-pose (Deref 'rbp (dict-ref env v)))
+     (if (dict-has-key? env v)
+         (values env stack-pos (Deref 'rbp (dict-ref env v)))
          (let* ([new-stack-pos (+ stack-pos 8)] [new-env (dict-set env v new-stack-pos)]) (values new-env new-stack-pos (Deref 'rbp new-stack-pos))))]))
 
 ;; patch-instructions : psuedo-x86 -> x86
@@ -198,7 +219,7 @@
      ("remove complex opera*" ,remove-complex-opera* ,interp-Lvar)
      ("explicate control" ,explicate-control ,interp-Cvar)
      ("instruction selection" ,select-instructions ,interp-x86-0)
-     ;; ("assign homes" ,assign-homes ,interp-x86-0)
+     ("assign homes" ,assign-homes ,interp-x86-0)
      ;; ("patch instructions" ,patch-instructions ,interp-x86-0)
      ;; ("prelude-and-conclusion" ,prelude-and-conclusion ,interp-x86-0)
      ))
