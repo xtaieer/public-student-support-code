@@ -56,6 +56,11 @@
 ;; HW1 Passes
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; uniquify : R1 -> R1
+(define (uniquify p)
+  (match p
+    [(Program info e) (Program info ((uniquify-exp '()) e))]))
+
 (define (uniquify-exp env)
   (lambda (e)
     (match e
@@ -63,14 +68,9 @@
        (Var (dict-ref env x))]
       [(Int n) (Int n)]
       [(Let x e body)
-       (define new-name (gensym)) (define new-env (dict-set env x new-name)) (Let new-name ((uniquify-exp env) e) ((uniquify-exp new-env) body))]
+       (let* ([new-name (gensym)] [new-env (dict-set env x new-name)]) (Let new-name ((uniquify-exp env) e) ((uniquify-exp new-env) body)))]
       [(Prim op es)
        (Prim op (for/list ([e es]) ((uniquify-exp env) e)))])))
-
-;; uniquify : R1 -> R1
-(define (uniquify p)
-  (match p
-    [(Program info e) (Program info ((uniquify-exp '()) e))]))
 
 ;; remove-complex-opera* : R1 -> R1
 (define (remove-complex-opera* p)
@@ -87,25 +87,24 @@
   (match exp
   [(Int v) (Int v)]
   [(Var v) (Var v)]
-  [(Prim 'read '()) (Prim 'read '())]
-  [(Prim '- (list e))
-   (if (atom? e)
-       (Prim '- (list e))
-       (let-values ([(var-name dict) (rco-atom e)]) (Let var-name (dict-ref dict var-name) (Prim '- (list (Var var-name))))))]
-  [(Prim '+ (list e1 e2))
-   (match (list (atom? e1) (atom? e2))
-     [(list #t #t) (Prim '+ (list e1 e2))]
-     [(list #f #f)
-      (define-values (name1 alist1) (rco-atom e1))
-      (define-values (name2 alist2) (rco-atom e2))
-      (Let name1 (dict-ref alist1 name1) (Let name2 (dict-ref alist2 name2) (Prim '+ (list (Var name1) (Var name2)))))]
-     [(list #f #t) (define-values (name1 alist1) (rco-atom e1)) (Let name1 (dict-ref alist1 name1) (Prim '+ (list (Var name1) e2)))]
-     [(list #t #f) (define-values (name2 alist2) (rco-atom e2)) (Let name2 (dict-ref alist2 name2) (Prim '+ (list e1 (Var name2))))])]
+  [(Prim op args) (let-values ([(var-atoms new-args) (rco-exp-list '() args)]) (rebuild-prim-exp var-atoms op new-args))]
   [(Let var e b) (Let var (rco-exp e) (rco-exp b))]))
 
-(define (rco-atom exp)
- (define var-name (gensym))
-  (values var-name (dict-set '() var-name (rco-exp exp))))
+(define (rebuild-prim-exp var-atoms op args)
+  (match var-atoms
+    ['() (Prim op args)]
+    [(cons va tail) (Let (car va) (cdr va) (rebuild-prim-exp tail op args))]))
+
+(define (rco-exp-list var-atoms exps)
+  (match exps
+    ['() (values var-atoms '())]
+    [(cons e tail)
+     (let-values ([(new-var-atoms new-tail) (rco-exp-list var-atoms tail)])
+       (if (atom? e)
+           (values new-var-atoms (cons e new-tail))
+           (let ([var-atom (rco-atom e)]) (values (cons var-atom new-var-atoms) (cons (Var (car var-atom)) new-tail)))))]))
+
+(define (rco-atom exp) (cons (gensym) (rco-exp exp)))
 
 ;; explicate-control : R1 -> C0
 (define (explicate-control p)
