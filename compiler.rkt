@@ -204,7 +204,20 @@
 
 ;; patch-instructions : psuedo-x86 -> x86
 (define (patch-instructions p)
-  (error "TODO: code goes here (patch-instructions)"))
+  (match p
+    [(X86Program info label-blocks)
+     (X86Program
+      info
+      (map
+       (lambda (label-block)
+         (cons (car label-block)
+               (match (cdr label-block) [(Block info instrs) (Block info (foldr append '() (map patch-instructions-instr instrs)))])))
+       label-blocks))]))
+
+(define (patch-instructions-instr instr)
+  (match instr
+    [(Instr 'movq (list (Deref reg1 int1) (Deref reg2 int2))) (list (Instr 'movq (list (Deref reg1 int1) (Reg 'rax))) (Instr 'movq (list (Reg 'rax) (Deref reg2 int2))))]
+    [else (list instr)]))
 
 ;; prelude-and-conclusion : x86 -> x86
 (define (prelude-and-conclusion p)
@@ -220,7 +233,7 @@
      ("explicate control" ,explicate-control ,interp-Cvar)
      ("instruction selection" ,select-instructions ,interp-x86-0)
      ("assign homes" ,assign-homes ,interp-x86-0)
-     ;; ("patch instructions" ,patch-instructions ,interp-x86-0)
+     ("patch instructions" ,patch-instructions ,interp-x86-0)
      ;; ("prelude-and-conclusion" ,prelude-and-conclusion ,interp-x86-0)
      ))
 
