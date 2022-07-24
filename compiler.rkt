@@ -91,18 +91,16 @@
   [(Let var e b) (Let var (rco-exp e) (rco-exp b))]))
 
 (define (rebuild-prim-exp var-atoms op args)
-  (match var-atoms
-    ['() (Prim op args)]
-    [(cons va tail) (Let (car va) (cdr va) (rebuild-prim-exp tail op args))]))
+  (foldr (lambda (var-atom result) (Let (car var-atom) (cdr var-atom) result)) (Prim op args) var-atoms ))
 
 (define (rco-exp-list var-atoms exps)
-  (match exps
-    ['() (values var-atoms '())]
-    [(cons e tail)
-     (let-values ([(new-var-atoms new-tail) (rco-exp-list var-atoms tail)])
-       (if (atom? e)
-           (values new-var-atoms (cons e new-tail))
-           (let ([var-atom (rco-atom e)]) (values (cons var-atom new-var-atoms) (cons (Var (car var-atom)) new-tail)))))]))
+  (let ([r (foldr
+            (lambda (exp result)
+              (if (atom? exp)
+                  (cons (car result) (cons exp (cdr result)))
+                  (let ([var-atom (rco-atom exp)]) (cons (cons var-atom (car result)) (cons (Var (car var-atom)) (cdr result))))))
+            (cons var-atoms '()) exps)])
+    (values (car r) (cdr r))))
 
 (define (rco-atom exp) (cons (gensym) (rco-exp exp)))
 
