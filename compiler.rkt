@@ -133,9 +133,17 @@
     [(Seq st ta) (Seq st (assign-tail ta x cont))]))
 
 ;; select-instructions : C0 -> pseudo-x86
+;(define (select-instructions p)
+;  (match p
+;    [(CProgram info alist) (X86Program info (append (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) 'conclusion)))) (list (cons 'conclusion (Block '() (list (Retq)))))))]))
+
 (define (select-instructions p)
   (match p
-    [(CProgram info alist) (X86Program info (append (for/list ([a alist]) (cons (car a) (Block info (select-instructions-tail (cdr a) 'conclusion)))) (list (cons 'conclusion (Block '() (list (Retq)))))))]))
+    [(CProgram info alist)
+     (X86Program info
+                 (append
+                  (for/list ([a alist]) (cons (car a) (let ([instructions (select-instructions-tail (cdr a) 'conclusion)]) (Block (live-after-sets instructions (set)) instructions))))
+                  (list (cons 'conclusion (Block '() (list (Retq)))))))]))
 
 (define (select-instructions-tail tail label)
   (match tail
@@ -219,6 +227,49 @@
 ;; prelude-and-conclusion : x86 -> x86
 (define (prelude-and-conclusion p)
   (error "TODO: code goes here (prelude-and-conclusion)"))
+
+;; liveness analysis
+(define (live-after-sets instructions init-sets)
+  (foldr
+   (lambda (instr after-sets)
+     (let ([r-set (read-locations instr)]
+           [w-set (write-locations instr)])
+       (cons (set-union (set-subtract (first after-sets) w-set) r-set) after-sets)))
+   (cons init-sets '())
+   instructions))
+
+(define (arg->location-set arg)
+  (match arg
+    [(Var v) (set v)]
+    [(Imm int) (set)]
+    [(Reg reg) (set reg)]
+    [(Deref reg int) (set (cons reg int))]))
+
+(define (read-locations instruction)
+   (match instruction
+     [(Instr 'addq args) (foldr set-union (set) (map arg->location-set args))]
+     [(Instr 'subq args) (foldr set-union (set) (map arg->location-set args))]
+     [(Instr 'movq (list arg1 arg2)) (arg->location-set arg1)]
+     [(Instr 'negq (list arg))  (arg->location-set arg)]
+     ; [(Pushq arg) (if (location? arg) (set arg) (set))]
+     ; [(Popq arg) (set (Reg 'rsb))]
+     [else (set)]))
+
+(define (write-locations instruction)
+   (match instruction
+     [(Instr 'addq (list arg1 arg2)) (arg->location-set arg2)]
+     [(Instr 'subq (list arg1 arg2)) (arg->location-set arg2)]
+     [(Instr 'movq (list arg1 arg2)) (arg->location-set arg2)]
+     [(Instr 'negq (list arg)) (arg->location-set arg)]
+     [(Callq label int) (foldr set-union (set) (map arg->location-set caller-saved-regs))]
+     ;[(Pushq arg) (set (Reg 'rsp))]
+     ;[(Popq arg) (set arg)]
+     [else (set)]))
+
+(define caller-saved-regs (list (Reg 'rax) (Reg 'rcx) (Reg 'rdx) (Reg 'rsi) (Reg 'rdi) (Reg 'r8) (Reg 'r9) (Reg 'r10) (Reg 'r11)))
+ 
+(define callee-saved-regs (list (Reg 'rsp) (Reg 'rbp) (Reg 'rbx) (Reg 'r12) (Reg 'r13) (Reg 'r14) (Reg 'r15)))
+
 
 ;; Define the compiler passes to be used by interp-tests and the grader
 ;; Note that your compiler file (the file that defines the passes)
